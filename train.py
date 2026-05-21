@@ -47,6 +47,13 @@ class Network:
 
         return self.activations[-1]
 
+    def loss(self, output: np.ndarray, y: np.ndarray) -> float:
+        n = len(y)
+        y_truth = np.zeros_like(output)
+        y_truth[np.arange(n), y] = 1.0
+        output = np.clip(output, 1e-15, 1.0)
+        return -np.sum(y_truth * np.log(output)) / n
+
     @staticmethod
     def _relu(z: np.ndarray) -> np.ndarray:
         return np.maximum(0, z)
@@ -102,5 +109,9 @@ if __name__ == "__main__":
 
     initial_output = network.forward(X)
 
+    loss = network.loss(initial_output, y)
     print("### Initial unoptimized output ###")
     print(initial_output)
+
+    print("--- LOSS ---")
+    print(loss)
