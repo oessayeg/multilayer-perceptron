@@ -23,8 +23,8 @@ def load_data(filepath: str) -> tuple[np.ndarray, np.ndarray]:
 class Network:
     def __init__(self, layer_sizes: list[int]) -> None:
         self.layer_sizes = layer_sizes
-        self.weights = []
-        self.biases = []
+        self.weights: list[np.ndarray] = []
+        self.biases: list[np.ndarray] = []
 
         for i in range(len(layer_sizes) - 1):
             fan_in = layer_sizes[i]
@@ -35,6 +35,28 @@ class Network:
             b = np.zeros((fan_out, 1))
             self.weights.append(w)
             self.biases.append(b)
+
+    def forward(self, X: np.ndarray) -> np.ndarray:
+        self.activations = [X]
+
+        for i, (w, b) in enumerate(zip(self.weights, self.biases)):
+            z = self.activations[-1] @ w.T + b.T
+            is_output = i == len(self.weights) - 1
+            a = self._softmax(z) if is_output else self._relu(z)
+            self.activations.append(a)
+
+        return self.activations[-1]
+
+    @staticmethod
+    def _relu(z: np.ndarray) -> np.ndarray:
+        return np.maximum(0, z)
+
+    @staticmethod
+    def _softmax(z: np.ndarray) -> np.ndarray:
+        # Subtract row max for numerical stability
+        z = z - z.max(axis=1, keepdims=True)
+        exp = np.exp(z)
+        return exp / exp.sum(axis=1, keepdims=True)
 
     def __repr__(self) -> str:
         lines = ["Network architecture:"]
@@ -77,4 +99,8 @@ if __name__ == "__main__":
     layer_sizes = [input_size] + args.layer + [output_size]
 
     network = Network(layer_sizes)
-    print(network)
+
+    initial_output = network.forward(X)
+
+    print("### Initial unoptimized output ###")
+    print(initial_output)
