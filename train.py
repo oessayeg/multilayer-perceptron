@@ -1,11 +1,12 @@
 import argparse
+import pickle
 import numpy as np
 import pandas as pd
 
 DEFAULT_LAYERS = [24, 24]
 
 
-def load_data(filepath: str) -> tuple[np.ndarray, np.ndarray]:
+def load_data(filepath: str) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
     df = pd.read_csv(filepath, header=None)
 
     X = df.iloc[:, 2:].to_numpy(dtype=float)
@@ -17,7 +18,7 @@ def load_data(filepath: str) -> tuple[np.ndarray, np.ndarray]:
 
     y = (labels == "M").astype(int)
 
-    return X, y
+    return X, y, mean, std
 
 
 class Network:
@@ -107,6 +108,11 @@ class Network:
                     f"epoch {epoch:>5}/{epochs}  loss: {current_loss:.4f}  accuracy: {accuracy:.1f}%"
                 )
 
+    def save(self, path: str, mean: np.ndarray, std: np.ndarray) -> None:
+        with open(path, "wb") as f:
+            pickle.dump({"weights": self.weights, "biases": self.biases, "mean": mean, "std": std}, f)
+        print(f"Model saved to {path}")
+
     def __repr__(self) -> str:
         lines = ["Network architecture:"]
         for i, (w, b) in enumerate(zip(self.weights, self.biases)):
@@ -151,7 +157,7 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    X, y = load_data(args.dataset)
+    X, y, mean, std = load_data(args.dataset)
     print(f"Loaded {X.shape[0]} samples, {X.shape[1]} features")
     print(f"Classes -> M: {y.sum()}, B: {(y == 0).sum()}")
 
@@ -163,3 +169,4 @@ if __name__ == "__main__":
     print(network)
 
     network.train(X, y, epochs=args.epochs, lr=args.learning_rate)
+    network.save("model.pkl", mean, std)
