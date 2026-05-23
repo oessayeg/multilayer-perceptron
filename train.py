@@ -290,6 +290,17 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def print_confusion_matrix(y_true: np.ndarray, y_pred: np.ndarray, label: str) -> None:
+    tp = int(((y_pred == 1) & (y_true == 1)).sum())
+    tn = int(((y_pred == 0) & (y_true == 0)).sum())
+    fp = int(((y_pred == 1) & (y_true == 0)).sum())
+    fn = int(((y_pred == 0) & (y_true == 1)).sum())
+    print(f"\nConfusion matrix ({label}):")
+    print(f"                Predicted B   Predicted M")
+    print(f"  Actual B    |  {tn:^10d}  |  {fp:^10d}  |")
+    print(f"  Actual M    |  {fn:^10d}  |  {tp:^10d}  |")
+
+
 def plot_history(history: dict[str, list[float]], epochs: int) -> None:
     epoch_range = range(1, epochs + 1)
     has_val = bool(history["val_loss"])
@@ -381,4 +392,12 @@ if __name__ == "__main__":
         batch_size=args.batch_size,
     )
     network.save("model.pkl", mean, std)
+
+    train_preds = network.forward(X).argmax(axis=1)
+    print_confusion_matrix(y, train_preds, "train")
+
+    if X_val is not None and y_val is not None:
+        val_preds = network.forward(X_val).argmax(axis=1)
+        print_confusion_matrix(y_val, val_preds, "validation")
+
     plot_history(history, len(history["train_loss"]))
