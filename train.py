@@ -117,6 +117,7 @@ class Network:
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
         patience: int | None = None,
+        batch_size: int | None = None,
     ) -> dict[str, list[float]]:
         history: dict[str, list[float]] = {
             "train_loss": [],
@@ -135,15 +136,23 @@ class Network:
         best_weights = None
         best_biases = None
         patience_counter = 0
+        n = len(y)
+        effective_batch = n if batch_size is None else batch_size
 
         for epoch in range(1, epochs + 1):
+            indices = np.random.permutation(n)
+            X_shuffled, y_shuffled = X[indices], y[indices]
+
+            for start in range(0, n, effective_batch):
+                X_batch = X_shuffled[start : start + effective_batch]
+                y_batch = y_shuffled[start : start + effective_batch]
+                self.forward(X_batch)
+                dW, db = self.backward(y_batch)
+                for i in range(len(self.weights)):
+                    self.weights[i] -= lr * dW[i]
+                    self.biases[i] -= lr * db[i]
+
             output = self.forward(X)
-            dW, db = self.backward(y)
-
-            for i in range(len(self.weights)):
-                self.weights[i] -= lr * dW[i]
-                self.biases[i] -= lr * db[i]
-
             train_loss = self.loss(output, y)
             train_preds = output.argmax(axis=1)
             train_acc = (train_preds == y).mean()
@@ -271,6 +280,13 @@ def parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="Path to the validation dataset (default: dataset_validate.csv)",
     )
+    parser.add_argument(
+        "--batch_size",
+        type=int,
+        default=None,
+        metavar="N",
+        help="Mini-batch size (default: full dataset / batch gradient descent)",
+    )
     return parser.parse_args()
 
 
@@ -362,6 +378,7 @@ if __name__ == "__main__":
         X_val=X_val,
         y_val=y_val,
         patience=args.patience,
+        batch_size=args.batch_size,
     )
     network.save("model.pkl", mean, std)
     plot_history(history, len(history["train_loss"]))
