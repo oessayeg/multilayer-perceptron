@@ -90,6 +90,23 @@ class Network:
         exp = np.exp(z)
         return exp / exp.sum(axis=1, keepdims=True)
 
+    def train(self, X: np.ndarray, y: np.ndarray, epochs: int, lr: float) -> None:
+        for epoch in range(1, epochs + 1):
+            output = self.forward(X)
+            dW, db = self.backward(y)
+
+            for i in range(len(self.weights)):
+                self.weights[i] -= lr * dW[i]
+                self.biases[i] -= lr * db[i]
+
+            if epoch % 100 == 0:
+                current_loss = self.loss(output, y)
+                predictions = output.argmax(axis=1)
+                accuracy = (predictions == y).mean() * 100
+                print(
+                    f"epoch {epoch:>5}/{epochs}  loss: {current_loss:.4f}  accuracy: {accuracy:.1f}%"
+                )
+
     def __repr__(self) -> str:
         lines = ["Network architecture:"]
         for i, (w, b) in enumerate(zip(self.weights, self.biases)):
@@ -116,6 +133,18 @@ def parse_args() -> argparse.Namespace:
         metavar="FILE",
         help="Path to the training dataset (default: dataset_train.csv)",
     )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10000,
+        help="Number of training epochs (default: 1000)",
+    )
+    parser.add_argument(
+        "--learning_rate",
+        type=float,
+        default=0.01,
+        help="Learning rate (default: 0.01)",
+    )
     return parser.parse_args()
 
 
@@ -131,11 +160,6 @@ if __name__ == "__main__":
     layer_sizes = [input_size] + args.layer + [output_size]
 
     network = Network(layer_sizes)
+    print(network)
 
-    initial_output = network.forward(X)
-
-    loss = network.loss(initial_output, y)
-
-    gradients = network.backward(y)
-    print("@@@@@ Gradients @@@@")
-    print(gradients)
+    network.train(X, y, epochs=args.epochs, lr=args.learning_rate)
