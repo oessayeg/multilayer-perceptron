@@ -27,6 +27,8 @@ class Network:
         self.layer_sizes = layer_sizes
         self.weights: list[np.ndarray] = []
         self.biases: list[np.ndarray] = []
+        self.vel_w: list[np.ndarray] = []
+        self.vel_b: list[np.ndarray] = []
 
         for i in range(len(layer_sizes) - 1):
             fan_in = layer_sizes[i]
@@ -37,6 +39,8 @@ class Network:
             b = np.zeros((fan_out, 1))
             self.weights.append(w)
             self.biases.append(b)
+            self.vel_w.append(np.zeros_like(w))
+            self.vel_b.append(np.zeros_like(b))
 
     def forward(self, X: np.ndarray) -> np.ndarray:
         self.activations = [X]
@@ -118,6 +122,7 @@ class Network:
         y_val: np.ndarray | None = None,
         patience: int | None = None,
         batch_size: int | None = None,
+        momentum: float = 0.9,
     ) -> dict[str, list[float]]:
         history: dict[str, list[float]] = {
             "train_loss": [],
@@ -146,11 +151,19 @@ class Network:
             for start in range(0, n, effective_batch):
                 X_batch = X_shuffled[start : start + effective_batch]
                 y_batch = y_shuffled[start : start + effective_batch]
+                # Nesterov: evaluate gradients at the lookahead position
+                for i in range(len(self.weights)):
+                    self.weights[i] += momentum * self.vel_w[i]
+                    self.biases[i] += momentum * self.vel_b[i]
                 self.forward(X_batch)
                 dW, db = self.backward(y_batch)
                 for i in range(len(self.weights)):
-                    self.weights[i] -= lr * dW[i]
-                    self.biases[i] -= lr * db[i]
+                    self.weights[i] -= momentum * self.vel_w[i]
+                    self.biases[i] -= momentum * self.vel_b[i]
+                    self.vel_w[i] = momentum * self.vel_w[i] - lr * dW[i]
+                    self.vel_b[i] = momentum * self.vel_b[i] - lr * db[i]
+                    self.weights[i] += self.vel_w[i]
+                    self.biases[i] += self.vel_b[i]
 
             output = self.forward(X)
             train_loss = self.loss(output, y)
