@@ -100,6 +100,7 @@ class Network:
         lr: float,
         X_val: np.ndarray | None = None,
         y_val: np.ndarray | None = None,
+        patience: int | None = None,
     ) -> dict[str, list[float]]:
         history: dict[str, list[float]] = {
             "train_loss": [],
@@ -107,6 +108,11 @@ class Network:
             "val_loss": [],
             "val_acc": [],
         }
+
+        best_val_loss = float("inf")
+        best_weights = None
+        best_biases = None
+        patience_counter = 0
 
         for epoch in range(1, epochs + 1):
             output = self.forward(X)
@@ -130,10 +136,28 @@ class Network:
                 history["val_loss"].append(val_loss)
                 history["val_acc"].append(val_acc)
 
+                if patience is not None:
+                    if val_loss < best_val_loss:
+                        best_val_loss = val_loss
+                        best_weights = [w.copy() for w in self.weights]
+                        best_biases = [b.copy() for b in self.biases]
+                        patience_counter = 0
+                    else:
+                        patience_counter += 1
+
             msg = f"epoch {epoch:02d}/{epochs} - loss: {train_loss:.4f} - acc: {train_acc:.4f}"
             if X_val is not None:
                 msg += f" - val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
             print(msg)
+
+            if patience is not None and patience_counter >= patience:
+                print(
+                    f"Early stopping at epoch {epoch} (no improvement for {patience} epochs)"
+                )
+                assert best_weights is not None and best_biases is not None
+                self.weights = best_weights
+                self.biases = best_biases
+                break
 
         return history
 
@@ -180,14 +204,21 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--epochs",
         type=int,
-        default=4000,
-        help="Number of training epochs (default: 4000)",
+        default=10000,
+        help="Number of training epochs (default: 10000)",
     )
     parser.add_argument(
         "--learning_rate",
         type=float,
         default=0.01,
         help="Learning rate (default: 0.01)",
+    )
+    parser.add_argument(
+        "--patience",
+        type=int,
+        default=60,
+        metavar="N",
+        help="Early stopping patience (epochs without val_loss improvement before stopping, default: 50)",
     )
     parser.add_argument(
         "--val_dataset",
@@ -261,6 +292,7 @@ if __name__ == "__main__":
         lr=args.learning_rate,
         X_val=X_val,
         y_val=y_val,
+        patience=args.patience,
     )
     network.save("model.pkl", mean, std)
     plot_history(history, len(history["train_loss"]))
