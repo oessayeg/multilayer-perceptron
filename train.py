@@ -92,6 +92,22 @@ class Network:
         exp = np.exp(z)
         return exp / exp.sum(axis=1, keepdims=True)
 
+    @staticmethod
+    def _compute_metrics(
+        predictions: np.ndarray, y: np.ndarray
+    ) -> tuple[float, float, float]:
+        tp = ((predictions == 1) & (y == 1)).sum()
+        fp = ((predictions == 1) & (y == 0)).sum()
+        fn = ((predictions == 0) & (y == 1)).sum()
+        precision = tp / (tp + fp) if (tp + fp) > 0 else 0.0
+        recall = tp / (tp + fn) if (tp + fn) > 0 else 0.0
+        f1 = (
+            2 * precision * recall / (precision + recall)
+            if (precision + recall) > 0
+            else 0.0
+        )
+        return float(precision), float(recall), float(f1)
+
     def train(
         self,
         X: np.ndarray,
@@ -105,8 +121,14 @@ class Network:
         history: dict[str, list[float]] = {
             "train_loss": [],
             "train_acc": [],
+            "train_precision": [],
+            "train_recall": [],
+            "train_f1": [],
             "val_loss": [],
             "val_acc": [],
+            "val_precision": [],
+            "val_recall": [],
+            "val_f1": [],
         }
 
         best_val_loss = float("inf")
@@ -123,18 +145,33 @@ class Network:
                 self.biases[i] -= lr * db[i]
 
             train_loss = self.loss(output, y)
-            train_acc = (output.argmax(axis=1) == y).mean()
+            train_preds = output.argmax(axis=1)
+            train_acc = (train_preds == y).mean()
+            train_precision, train_recall, train_f1 = self._compute_metrics(
+                train_preds, y
+            )
             history["train_loss"].append(train_loss)
-            history["train_acc"].append(train_acc)
+            history["train_acc"].append(float(train_acc))
+            history["train_precision"].append(train_precision)
+            history["train_recall"].append(train_recall)
+            history["train_f1"].append(train_f1)
 
             val_loss = float("nan")
             val_acc = float("nan")
+            val_f1 = float("nan")
             if X_val is not None and y_val is not None:
                 val_output = self.forward(X_val)
                 val_loss = self.loss(val_output, y_val)
-                val_acc = (val_output.argmax(axis=1) == y_val).mean()
+                val_preds = val_output.argmax(axis=1)
+                val_acc = (val_preds == y_val).mean()
+                val_precision, val_recall, val_f1 = self._compute_metrics(
+                    val_preds, y_val
+                )
                 history["val_loss"].append(val_loss)
-                history["val_acc"].append(val_acc)
+                history["val_acc"].append(float(val_acc))
+                history["val_precision"].append(val_precision)
+                history["val_recall"].append(val_recall)
+                history["val_f1"].append(val_f1)
 
                 if patience is not None:
                     if val_loss < best_val_loss:
@@ -145,9 +182,16 @@ class Network:
                     else:
                         patience_counter += 1
 
-            msg = f"epoch {epoch:02d}/{epochs} - loss: {train_loss:.4f} - acc: {train_acc:.4f}"
+            msg = (
+                f"epoch {epoch:02d}/{epochs}"
+                f" - loss: {train_loss:.4f} - acc: {train_acc:.4f}"
+                f" - precision: {train_precision:.4f} - recall: {train_recall:.4f} - f1: {train_f1:.4f}"
+            )
             if X_val is not None:
-                msg += f" - val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
+                msg += (
+                    f" - val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
+                    f" - val_f1: {val_f1:.4f}"
+                )
             print(msg)
 
             if patience is not None and patience_counter >= patience:
@@ -232,26 +276,51 @@ def parse_args() -> argparse.Namespace:
 
 def plot_history(history: dict[str, list[float]], epochs: int) -> None:
     epoch_range = range(1, epochs + 1)
+    has_val = bool(history["val_loss"])
 
-    fig = plt.figure(figsize=(12, 5))
-    ax1 = fig.add_subplot(1, 2, 1)
-    ax2 = fig.add_subplot(1, 2, 2)
+    fig = plt.figure(figsize=(14, 10))
+    ax_loss = fig.add_subplot(2, 2, 1)
+    ax_acc = fig.add_subplot(2, 2, 2)
+    ax_pr = fig.add_subplot(2, 2, 3)
+    ax_f1 = fig.add_subplot(2, 2, 4)
 
-    ax1.plot(epoch_range, history["train_loss"], label="Training loss")
-    if history["val_loss"]:
-        ax1.plot(epoch_range, history["val_loss"], label="Validation loss")
-    ax1.set_xlabel("Epoch")
-    ax1.set_ylabel("Loss")
-    ax1.set_title("Loss curves")
-    ax1.legend()
+    ax_loss.plot(epoch_range, history["train_loss"], label="Train")
+    if has_val:
+        ax_loss.plot(epoch_range, history["val_loss"], label="Validation")
+    ax_loss.set_xlabel("Epoch")
+    ax_loss.set_ylabel("Loss")
+    ax_loss.set_title("Loss")
+    ax_loss.legend()
 
-    ax2.plot(epoch_range, history["train_acc"], label="Training accuracy")
-    if history["val_acc"]:
-        ax2.plot(epoch_range, history["val_acc"], label="Validation accuracy")
-    ax2.set_xlabel("Epoch")
-    ax2.set_ylabel("Accuracy (%)")
-    ax2.set_title("Learning curves")
-    ax2.legend()
+    ax_acc.plot(epoch_range, history["train_acc"], label="Train")
+    if has_val:
+        ax_acc.plot(epoch_range, history["val_acc"], label="Validation")
+    ax_acc.set_xlabel("Epoch")
+    ax_acc.set_ylabel("Accuracy")
+    ax_acc.set_title("Accuracy")
+    ax_acc.legend()
+
+    ax_pr.plot(epoch_range, history["train_precision"], label="Train precision")
+    ax_pr.plot(epoch_range, history["train_recall"], label="Train recall")
+    if has_val:
+        ax_pr.plot(
+            epoch_range, history["val_precision"], label="Val precision", linestyle="--"
+        )
+        ax_pr.plot(
+            epoch_range, history["val_recall"], label="Val recall", linestyle="--"
+        )
+    ax_pr.set_xlabel("Epoch")
+    ax_pr.set_ylabel("Score")
+    ax_pr.set_title("Precision & Recall")
+    ax_pr.legend()
+
+    ax_f1.plot(epoch_range, history["train_f1"], label="Train")
+    if has_val:
+        ax_f1.plot(epoch_range, history["val_f1"], label="Validation")
+    ax_f1.set_xlabel("Epoch")
+    ax_f1.set_ylabel("F1 score")
+    ax_f1.set_title("F1 Score")
+    ax_f1.legend()
 
     plt.tight_layout()
     plt.show()
