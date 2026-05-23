@@ -54,6 +54,31 @@ class Network:
         output = np.clip(output, 1e-15, 1.0)
         return -np.sum(y_truth * np.log(output)) / n
 
+    def backward(self, y: np.ndarray) -> tuple[list[np.ndarray], list[np.ndarray]]:
+        n = len(y)
+        output = self.activations[-1]
+
+        y_true = np.zeros_like(output)
+        y_true[np.arange(n), y] = 1.0
+
+        # combined gradient of softmax + cross-entropy simplifies to this
+        delta = output - y_true  # shape (n_rows, 2)
+
+        dW: list[np.ndarray] = []
+        db: list[np.ndarray] = []
+
+        for i in reversed(range(len(self.weights))):
+            a_prev = self.activations[i]
+
+            dW.insert(0, (delta.T @ a_prev) / n)
+            db.insert(0, delta.sum(axis=0, keepdims=True).T / n)
+
+            if i > 0:
+                delta = delta @ self.weights[i]
+                delta = delta * (self.activations[i] > 0)  # ReLU derivative
+
+        return dW, db
+
     @staticmethod
     def _relu(z: np.ndarray) -> np.ndarray:
         return np.maximum(0, z)
@@ -110,8 +135,7 @@ if __name__ == "__main__":
     initial_output = network.forward(X)
 
     loss = network.loss(initial_output, y)
-    print("### Initial unoptimized output ###")
-    print(initial_output)
 
-    print("--- LOSS ---")
-    print(loss)
+    gradients = network.backward(y)
+    print("@@@@@ Gradients @@@@")
+    print(gradients)
