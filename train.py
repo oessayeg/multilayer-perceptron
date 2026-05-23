@@ -122,6 +122,7 @@ class Network:
             history["train_acc"].append(train_acc)
 
             val_loss = float("nan")
+            val_acc = float("nan")
             if X_val is not None and y_val is not None:
                 val_output = self.forward(X_val)
                 val_loss = self.loss(val_output, y_val)
@@ -129,11 +130,10 @@ class Network:
                 history["val_loss"].append(val_loss)
                 history["val_acc"].append(val_acc)
 
-            if epoch % 100 == 0:
-                msg = f"epoch {epoch:>5}/{epochs}  loss: {train_loss:.4f}  accuracy: {train_acc:.1f}%"
-                if X_val is not None:
-                    msg += f"  val_loss: {val_loss:.4f}  val_acc: {val_acc:.1f}%"
-                print(msg)
+            msg = f"epoch {epoch:02d}/{epochs} - loss: {train_loss:.4f} - acc: {train_acc:.4f}"
+            if X_val is not None:
+                msg += f" - val_loss: {val_loss:.4f} - val_acc: {val_acc:.4f}"
+            print(msg)
 
         return history
 
@@ -141,6 +141,7 @@ class Network:
         with open(path, "wb") as f:
             pickle.dump(
                 {
+                    "layer_sizes": self.layer_sizes,
                     "weights": self.weights,
                     "biases": self.biases,
                     "mean": mean,

@@ -6,10 +6,16 @@ import pandas as pd
 
 def load_model(
     path: str,
-) -> tuple[list[np.ndarray], list[np.ndarray], np.ndarray, np.ndarray]:
+) -> tuple[list[int], list[np.ndarray], list[np.ndarray], np.ndarray, np.ndarray]:
     with open(path, "rb") as f:
         data = pickle.load(f)
-    return data["weights"], data["biases"], data["mean"], data["std"]
+    return (
+        data["layer_sizes"],
+        data["weights"],
+        data["biases"],
+        data["mean"],
+        data["std"],
+    )
 
 
 def forward(
@@ -43,7 +49,8 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
 
-    weights, biases, mean, std = load_model(args.model)
+    layer_sizes, weights, biases, mean, std = load_model(args.model)
+    print(f"Architecture  : {' -> '.join(str(s) for s in layer_sizes)}")
 
     df = pd.read_csv(args.dataset, header=None)
     X = df.iloc[:, 2:].to_numpy(dtype=float)
