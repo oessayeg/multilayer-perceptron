@@ -367,50 +367,53 @@ def plot_history(history: dict[str, list[float]], epochs: int) -> None:
 
 
 if __name__ == "__main__":
-    args = parse_args()
-
-    X, y, mean, std = load_data(args.dataset)
-    print(f"Loaded {X.shape[0]} samples, {X.shape[1]} features")
-    print(f"Classes -> M: {y.sum()}, B: {(y == 0).sum()}")
-
-    X_val, y_val = None, None
     try:
-        X_val, y_val, _, _ = load_data(args.val_dataset)
-        # re-standardize using training mean/std
-        X_val_raw = (
-            pd.read_csv(args.val_dataset, header=None).iloc[:, 2:].to_numpy(dtype=float)
+        args = parse_args()
+
+        X, y, mean, std = load_data(args.dataset)
+        print(f"Loaded {X.shape[0]} samples, {X.shape[1]} features")
+        print(f"Classes -> M: {y.sum()}, B: {(y == 0).sum()}")
+
+        X_val, y_val = None, None
+        try:
+            X_val, y_val, _, _ = load_data(args.val_dataset)
+            # re-standardize using training mean/std
+            X_val_raw = (
+                pd.read_csv(args.val_dataset, header=None).iloc[:, 2:].to_numpy(dtype=float)
+            )
+            X_val = (X_val_raw - mean) / std
+            print(f"Loaded {X_val.shape[0]} validation samples")
+        except FileNotFoundError:
+            print(
+                f"Validation dataset '{args.val_dataset}' not found, skipping validation metrics."
+            )
+
+        input_size = X.shape[1]
+        output_size = 2
+        layer_sizes = [input_size] + args.layer + [output_size]
+
+        network = Network(layer_sizes)
+        print(network)
+
+        history = network.train(
+            X,
+            y,
+            epochs=args.epochs,
+            lr=args.learning_rate,
+            X_val=X_val,
+            y_val=y_val,
+            patience=args.patience,
+            batch_size=args.batch_size,
         )
-        X_val = (X_val_raw - mean) / std
-        print(f"Loaded {X_val.shape[0]} validation samples")
-    except FileNotFoundError:
-        print(
-            f"Validation dataset '{args.val_dataset}' not found, skipping validation metrics."
-        )
+        network.save("model.pkl", mean, std)
 
-    input_size = X.shape[1]
-    output_size = 2
-    layer_sizes = [input_size] + args.layer + [output_size]
+        train_preds = network.forward(X).argmax(axis=1)
+        print_confusion_matrix(y, train_preds, "train")
 
-    network = Network(layer_sizes)
-    print(network)
+        if X_val is not None and y_val is not None:
+            val_preds = network.forward(X_val).argmax(axis=1)
+            print_confusion_matrix(y_val, val_preds, "validation")
 
-    history = network.train(
-        X,
-        y,
-        epochs=args.epochs,
-        lr=args.learning_rate,
-        X_val=X_val,
-        y_val=y_val,
-        patience=args.patience,
-        batch_size=args.batch_size,
-    )
-    network.save("model.pkl", mean, std)
-
-    train_preds = network.forward(X).argmax(axis=1)
-    print_confusion_matrix(y, train_preds, "train")
-
-    if X_val is not None and y_val is not None:
-        val_preds = network.forward(X_val).argmax(axis=1)
-        print_confusion_matrix(y_val, val_preds, "validation")
-
-    plot_history(history, len(history["train_loss"]))
+        plot_history(history, len(history["train_loss"]))
+    except Exception as e:
+        print(f"Error: {e}")
